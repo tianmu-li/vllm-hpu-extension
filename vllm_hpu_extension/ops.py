@@ -69,6 +69,7 @@ def group_sum(partial_sum, block_mapping, block_groups, type="reduce_sum_T"):
 
 
 group_sum_tpc = os.environ.get('VLLM_SOFTMAX_TPC_GROUPSUM', 'false').lower() == 'true'
+eps_value = float(os.environ.get('VLLM_SOFTMAX_EPS_VALUE', str(torch.finfo(torch.bfloat16).tiny)))
 def pipelined_const_pa(attn, value, block_groups, block_mapping, block_scales, batch_size,
                  matmul_av_op, batch2block_matmul_op, block2batch_matmul_op):
     # Normalize the attention scores
@@ -85,7 +86,7 @@ def pipelined_const_pa(attn, value, block_groups, block_mapping, block_scales, b
         block_sums = block_sums.squeeze()
         group_sums = group_sum(block_sums, block_mapping, block_groups, 'reduce_sum_T')
     # For stability in case some of the sums have been zeroed out during block aggretation
-    group_sums.add_(torch.finfo(group_sums.dtype).tiny)
+    group_sums.add_(eps_value)
     group_sums = torch.maximum(block_sums, group_sums)
     attn = matmul_av_op(attn, value)
     if group_sum_tpc:
